@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <WinSock2.h>
+#include <conio.h>
 
 #include "Helpers.h"
 
@@ -10,12 +11,13 @@ int main(int argc , char* argv[])
 	struct sockaddr_in server;
 	char message[MAX_MSG_LEN];
 	char name[100];
+	u_long mode = 1;  // 1 to enable non-blocking socket
 
     printf( "username:");
     scanf("%s", name);
 
 	// Initialize WinSock
-	printf("\nInitialising Winsock...");
+	printf("\nInitialising...");
 	if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
 	{
 		printf("Failed. Error Code : %d",WSAGetLastError());
@@ -28,7 +30,7 @@ int main(int argc , char* argv[])
 	}
 
     // Connect socket to server
-	server.sin_addr.S_un.S_addr = inet_addr("192.168.0.20");
+	server.sin_addr.S_un.S_addr = inet_addr("192.168.0.16");
 	server.sin_family = AF_INET;
 	server.sin_port = htons(8888);
 
@@ -41,14 +43,23 @@ int main(int argc , char* argv[])
 	// Receive some data
     unsigned int recv_size;
     char server_reply[MAX_MSG_LEN];
+	ioctlsocket(s, FIONBIO, &mode); // Make socket non-blocking
 
     while (true){
-        gets(message);
-        if (send(s, message, strlen(message), 0) < 0)
-        {
-            puts("Send failed");
-        }
-        printf("%s: ", name);
+		if (_kbhit){
+        	gets(message);
+			if (strcmp(message, "quit") == 0) {SHUTDOWN(s,0)}
+
+			if (send(s, message, strlen(message), 0) < 0) {
+				puts("Send failed");
+			}
+			printf("%s: ", name);
+		}
+
+		if (recv(s, server_reply, MAX_MSG_LEN, 0) != SOCKET_ERROR) {
+			printf("\rserver: %s\n", server_reply);
+			printf("%s: ", name);
+		}
 	}
 
     SHUTDOWN(s,0)

@@ -46,13 +46,13 @@ int main(int argc , char* argv[])
     puts("Waiting for incoming connection...");
 
     c = sizeof(struct sockaddr_in);
-    if ((new_socket = accept(s, (struct sockaddr*)&client, &c)) != INVALID_SOCKET) {
+    while ((new_socket = accept(s, (struct sockaddr*)&client, &c)) != INVALID_SOCKET) {
         char* client_ip = inet_ntoa(client.sin_addr);
         int client_port = ntohs(client.sin_port);
         printf("Connection accepted from %s:%d\n", client_ip, client_port);
 
         //Receive a message from client
-        while( (recv_len = recv(new_socket , client_reply , MAX_MSG_LEN , 0)) > 0 ) {
+        while ( (recv_len = recv(new_socket , client_reply , MAX_MSG_LEN , 0)) > 0 ) {
             //Send the message back to client
             printf("%s:%d: %s\n", client_ip, client_port, client_reply);
             send(new_socket , client_reply , strlen(client_reply), 0);
