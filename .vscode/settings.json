@@ -10,6 +10,8 @@
         "string": "cpp",
         "map": "cpp",
         "stdio.h": "c",
-        "ios": "c"
+        "ios": "c",
+        "system_error": "c",
+        "xlocale": "c"
     }
 }

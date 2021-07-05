@@ -4,11 +4,12 @@
 
 #include "Helpers.h"
 
-int initialize(SOCKET* sock)
+int initialize(SOCKET* sock, const char* name)
 {
 	WSADATA wsa;
 	u_long mode = 1;  // 1 to enable non-blocking socket
 	struct sockaddr_in server;
+	char message[MAX_MSG_LEN];
 
 	// Initialize WinSock
 	printf("\nInitialising...");
@@ -31,18 +32,24 @@ int initialize(SOCKET* sock)
 		puts("connect error");
 		return 2;
 	}
+
+	sprintf(message, "%s %s\0", setusername, name);
+	send(*sock, message, strlen(message), 0); 
 	puts("Connected");
 
 	ioctlsocket(*sock, FIONBIO, &mode); // Make socket non-blocking
 }
 
-int main(int argc , char* argv[])
+int main(int argc, char* argv[])
 {
 	SOCKET sock;
-	char message[MAX_MSG_LEN], input[MAX_MSG_LEN], server_reply[MAX_MSG_LEN], name[100];
+	char message[MAX_MSG_LEN], input[MAX_MSG_LEN], server_reply[MAX_MSG_LEN], name[MAX_NAME_LEN];
 	unsigned int recv_size;
 	
-	int initcode = initialize(&sock);
+	printf("username:");
+	scanf("%s", name);
+	
+	int initcode = initialize(&sock, name);
 	switch (initcode) {
 	case 1:
 		return 1;
@@ -55,9 +62,6 @@ int main(int argc , char* argv[])
 	default:
 		break;	
 	}
-
-	printf("username:");
-	scanf("%s", name);
 
 	// Main execution loop
 	while (true){
@@ -85,7 +89,7 @@ int main(int argc , char* argv[])
 			server_reply[recv_size] = '\0';
 			printf("\r%s\n", server_reply);
 			printf("%s: ", name);
-		}
+		} 
 	}
 
 	SHUTDOWN(sock,0)

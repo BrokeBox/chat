@@ -1,20 +1,36 @@
 #include <stdio.h>
 #include <WinSock2.h>
+#include <string.h>
 #include "Helpers.h"
 
 #define MAX_CLIENTS 30
 #define FOR_EACH_CLIENT for (int i = 0; i < MAX_CLIENTS; ++i)
 
 const char* welcome = "Welcome to chat! Type \"quit\" to exit.\n";
+SOCKET clients[MAX_CLIENTS];
+char client_names[MAX_CLIENTS][MAX_NAME_LEN];
+
+/*
+* Setup sockets to prepare for client connections  
+*/
+void sendMessage(const char* msg, SOCKET exclude_client)
+{
+	for (int j = 0; (j < MAX_CLIENTS) && (clients[j] != 0); ++j) {
+		if (clients[j] != exclude_client) //...except the sender
+			send(clients[j], msg, strlen(msg), 0);
+	}
+}
 
 /*
 * Accept new client connections. 
 */
-void accept_new_connection(SOCKET master_sock, SOCKET* clients) 
+void accept_new_connection(SOCKET master_sock) 
 {
 	int c = sizeof(struct sockaddr_in);
+	int recv_len;
 	SOCKET new_socket;
 	struct sockaddr_in client;
+	char message[MAX_MSG_LEN];
 
 	if ((new_socket = accept(master_sock, (struct sockaddr*) &client, (int*) &c)) < 0) {
 		perror("accept");
@@ -22,6 +38,8 @@ void accept_new_connection(SOCKET master_sock, SOCKET* clients)
 	}
 
 	printf("%s:%d: Connected on socket %d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port), new_socket);
+	recv_len = recv(new_socket, message, MAX_MSG_LEN, 0);
+	message[recv_len] = '\0';
 
 	// Send greeting
 	if (send(new_socket, welcome, strlen(welcome), 0) != strlen(welcome)) 
@@ -31,6 +49,14 @@ void accept_new_connection(SOCKET master_sock, SOCKET* clients)
 	FOR_EACH_CLIENT {
 		if (clients[i] == 0) {
 			clients[i] = new_socket;
+
+			if (strstr(message, setusername) == message) {
+				strcpy(client_names[i], message + strlen(setusername) + 1);
+				sprintf(message, "Server: %s has joined the server\0", client_names[i]);
+				printf("%s\n", message);
+				sendMessage(message, clients[i]);
+			}
+
 			break;
 		}
 	}
@@ -39,9 +65,9 @@ void accept_new_connection(SOCKET master_sock, SOCKET* clients)
 /*
 * Receive and log messages from clients and send them back out to all other clients. 
 */
-void receive_client_messages(SOCKET* clients, const FD_SET* readfds) 
+void receive_client_messages(const FD_SET* readfds) 
 {
-	char client_msg[MAX_MSG_LEN];
+	char message[MAX_MSG_LEN];
 	struct sockaddr_in client;
 	int c, recv_len;
 
@@ -50,22 +76,24 @@ void receive_client_messages(SOCKET* clients, const FD_SET* readfds)
 		if(FD_ISSET(clients[i], readfds)) {
 			getpeername(clients[i] , (struct sockaddr*)&client , (int*)&c);
 
-			recv_len = recv(clients[i], client_msg, MAX_MSG_LEN, 0);
+			recv_len = recv(clients[i], message, MAX_MSG_LEN, 0);
 
 			// Handle any disconnects first
 			if ((recv_len == SOCKET_ERROR) || (recv_len == 0)) {
-				printf("%s:d: Disconnected on socket %d\n" , inet_ntoa(client.sin_addr) , ntohs(client.sin_port), clients[i]);
+				printf("%s:%d: Disconnected on socket %d\n" , inet_ntoa(client.sin_addr) , ntohs(client.sin_port), clients[i]);
+
+				if (strlen(client_names[i]) > 0) {
+					sprintf(message, "Server: %s has left the server\0", client_names[i]);
+					printf("%s\n", message);
+					sendMessage(message, clients[i]);
+				}
+
 				closesocket( clients[i] );
 				clients[i] = 0;
 			} else { // Otherwise assume its a normal message
-				client_msg[recv_len] = '\0';
-				printf("%s:%d: %s\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port), client_msg);
-				
-				// Send the message out to all clients...
-				for (int j = 0; (j < MAX_CLIENTS) && (clients[j] != 0); ++j) {
-					if (j != i) //...except the sender
-						send(clients[j] , client_msg , strlen(client_msg), 0);
-				}
+				message[recv_len] = '\0';
+				printf("%s:%d: %s\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port), message);
+				sendMessage(message, clients[i]);
 			}
 		}
 	}
@@ -74,11 +102,14 @@ void receive_client_messages(SOCKET* clients, const FD_SET* readfds)
 /*
 * Setup sockets to prepare for client connections  
 */
-int initialize(SOCKET* master_sock, SOCKET* clients)
+int initialize(SOCKET* master_sock)
 {
 	WSADATA wsa;
 	struct sockaddr_in server;
-	FOR_EACH_CLIENT{ clients[i] = 0; }
+	FOR_EACH_CLIENT{ 
+		clients[i] = 0; 
+		strcpy(client_names[i], "\0"); 
+	}
 
 	// Initialize WinSock
 	printf("\nInitialising Winsock...");
@@ -112,11 +143,11 @@ int initialize(SOCKET* master_sock, SOCKET* clients)
 */
 int main(int argc , char* argv[])
 {
-	SOCKET master_sock, clients[MAX_CLIENTS];
+	SOCKET master_sock;
 	
 	FD_SET readfds;
 
-	int initcode = initialize(&master_sock, clients);
+	int initcode = initialize(&master_sock);
 	switch (initcode) {
 	case 1:
 		return 1;
@@ -151,10 +182,10 @@ int main(int argc , char* argv[])
 
 		// Activity on master means a new connection coming in
 		if (FD_ISSET(master_sock, &readfds)) {
-			accept_new_connection(master_sock, clients);
+			accept_new_connection(master_sock);
 		}
 
-		receive_client_messages(clients, &readfds);
+		receive_client_messages(&readfds);
 	}
 
 	SHUTDOWN(master_sock, 0);
