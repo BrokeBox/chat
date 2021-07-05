@@ -1,5 +1,15 @@
 {
     "files.associations": {
-        "helpers.h": "c"
+        "helpers.h": "c",
+        "ostream": "c",
+        "istream": "cpp",
+        "memory": "cpp",
+        "type_traits": "cpp",
+        "vector": "cpp",
+        "iostream": "cpp",
+        "string": "cpp",
+        "map": "cpp",
+        "stdio.h": "c",
+        "ios": "c"
     }
 }
